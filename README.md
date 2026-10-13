@@ -3,8 +3,8 @@
 A distributed API monitoring platform. Add an endpoint and Pulse checks it on a
 schedule, tracking uptime, status codes, latency, failures and incidents.
 
-> **Status: Phase 0 (foundations).** Repo scaffolding, Postgres schema, CI. The
-> monitoring pipeline itself arrives in Phases 1–2.
+> **Status: Phase 1 in progress.** Monitor CRUD REST API on PostgreSQL is done.
+> Next: the in-process scheduler and goroutine worker pool, then the dashboard.
 
 ## Planned architecture
 
@@ -33,12 +33,43 @@ curl localhost:8080/healthz
 
 Run `make help` for all commands.
 
+Run the Postgres integration tests too (they use a throwaway schema, so your
+data is safe):
+
+```bash
+export PULSE_TEST_DATABASE_URL='postgres://pulse:pulse@localhost:5432/pulse?sslmode=disable'
+make test
+```
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/monitors` | Create a monitor (`201`) |
+| `GET` | `/api/v1/monitors` | List monitors, newest first |
+| `GET` | `/api/v1/monitors/{id}` | Get one monitor |
+| `PATCH` | `/api/v1/monitors/{id}` | Change any fields; `{"enabled": false}` pauses |
+| `DELETE` | `/api/v1/monitors/{id}` | Delete a monitor and its results (`204`) |
+| `GET` | `/healthz` | Liveness: the process is up |
+| `GET` | `/readyz` | Readiness: the database answers |
+
+```bash
+curl -X POST localhost:8080/api/v1/monitors \
+  -d '{"name": "Example", "url": "https://example.com", "interval_seconds": 30}'
+curl localhost:8080/api/v1/monitors
+curl -X PATCH localhost:8080/api/v1/monitors/<id> -d '{"enabled": false}'
+```
+
+Only `name` and `url` are required. Defaults: `GET`, every 60s, 10s timeout,
+expecting status 200. Errors always look like
+`{"error": {"code": "...", "message": "...", "details": [...]}}`.
+
 ## Repository layout
 
 | Path | Purpose |
 |---|---|
 | `backend/cmd/` | One entry point per service (`api` now; `scheduler`, `worker` later) |
-| `backend/internal/` | Application code: `config`, `domain`, `api`, ... |
+| `backend/internal/` | Application code: `config`, `domain`, `api` (+ `middleware`), `store/postgres` |
 | `backend/migrations/` | SQL migrations ([golang-migrate](https://github.com/golang-migrate/migrate)) |
 | `docs/adr/` | Architecture Decision Records |
 | `.github/workflows/` | CI |

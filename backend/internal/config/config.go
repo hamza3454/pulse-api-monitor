@@ -15,12 +15,14 @@ type Config struct {
 	HTTPAddr    string     // address the API listens on, e.g. ":8080"
 	DatabaseURL string     // PostgreSQL connection string
 	LogLevel    slog.Level // minimum level for structured logs
+	CORSOrigin  string     // the one browser origin allowed to call the API
 }
 
 const (
 	defaultHTTPAddr    = ":8080"
 	defaultDatabaseURL = "postgres://pulse:pulse@localhost:5432/pulse?sslmode=disable"
 	defaultLogLevel    = "info"
+	defaultCORSOrigin  = "http://localhost:5173" // the Vite dev server
 )
 
 // Load reads configuration using getenv (pass os.Getenv in production, a fake
@@ -35,6 +37,7 @@ func Load(getenv func(string) string) (Config, error) {
 		HTTPAddr:    valueOr(getenv("PULSE_HTTP_ADDR"), defaultHTTPAddr),
 		DatabaseURL: valueOr(getenv("PULSE_DATABASE_URL"), defaultDatabaseURL),
 		LogLevel:    level,
+		CORSOrigin:  valueOr(getenv("PULSE_CORS_ORIGIN"), defaultCORSOrigin),
 	}, nil
 }
 

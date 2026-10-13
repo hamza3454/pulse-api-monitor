@@ -14,6 +14,7 @@ import (
 
 	"pulse/internal/api"
 	"pulse/internal/config"
+	"pulse/internal/store/postgres"
 )
 
 func main() {
@@ -32,18 +33,32 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
 
+	// Cancel ctx on SIGINT/SIGTERM so the server can drain in-flight requests.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	connectCtx, cancelConnect := context.WithTimeout(ctx, 10*time.Second)
+	pool, err := postgres.Connect(connectCtx, cfg.DatabaseURL)
+	cancelConnect()
+	if err != nil {
+		return fmt.Errorf("connect to postgres: %w", err)
+	}
+	defer pool.Close()
+	logger.Info("connected to postgres")
+
 	srv := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(),
+		Addr: cfg.HTTPAddr,
+		Handler: api.NewRouter(api.Deps{
+			Monitors:   postgres.NewMonitorStore(pool),
+			DB:         pool,
+			Logger:     logger,
+			CORSOrigin: cfg.CORSOrigin,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-
-	// Cancel ctx on SIGINT/SIGTERM so the server can drain in-flight requests.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	serveErr := make(chan error, 1)
 	go func() {

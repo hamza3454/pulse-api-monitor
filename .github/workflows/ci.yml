@@ -20,13 +20,37 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # A real Postgres for the store's integration tests. Each test creates and
+    # drops its own schema from the migration files.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pulse -d pulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PULSE_TEST_DATABASE_URL: postgres://pulse:pulse@localhost:5432/pulse?sslmode=disable
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Check go.mod and go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum || {
+            echo "Run 'make tidy' (or 'cd backend && go mod tidy') and commit go.mod / go.sum."; exit 1; }
 
       - name: Check formatting
         run: |

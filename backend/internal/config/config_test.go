@@ -23,6 +23,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LogLevel != slog.LevelInfo {
 		t.Errorf("LogLevel = %v, want info", cfg.LogLevel)
 	}
+	if cfg.CORSOrigin != "http://localhost:5173" {
+		t.Errorf("CORSOrigin = %q, want the Vite dev origin", cfg.CORSOrigin)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -30,11 +33,13 @@ func TestLoadOverrides(t *testing.T) {
 		"PULSE_HTTP_ADDR":    ":9090",
 		"PULSE_DATABASE_URL": "postgres://u:p@db:5432/x",
 		"PULSE_LOG_LEVEL":    "debug",
+		"PULSE_CORS_ORIGIN":  "https://pulse.example.com",
 	}))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.HTTPAddr != ":9090" || cfg.DatabaseURL != "postgres://u:p@db:5432/x" || cfg.LogLevel != slog.LevelDebug {
+	if cfg.HTTPAddr != ":9090" || cfg.DatabaseURL != "postgres://u:p@db:5432/x" || cfg.LogLevel != slog.LevelDebug ||
+		cfg.CORSOrigin != "https://pulse.example.com" {
 		t.Errorf("overrides not applied: %+v", cfg)
 	}
 }
