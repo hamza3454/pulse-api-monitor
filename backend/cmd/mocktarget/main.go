@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/rand/v2"
 	"net/http"
@@ -66,7 +67,7 @@ func newHandler(randFloat func() float64) http.Handler {
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprint(w, `Pulse mock target
+		write(w, `Pulse mock target
 
   GET  /ok               always 200
   GET  /slow?ms=2000     waits that long (max 30s), then 200
@@ -79,13 +80,13 @@ func newHandler(randFloat func() float64) http.Handler {
 	})
 
 	mux.HandleFunc("GET /ok", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, "ok\n")
+		write(w, "ok\n")
 	})
 
 	mux.HandleFunc("GET /slow", func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-time.After(parseSlow(r.URL.Query().Get("ms"))):
-			fmt.Fprint(w, "ok (slowly)\n")
+			write(w, "ok (slowly)\n")
 		case <-r.Context().Done(): // the caller gave up
 		}
 	})
@@ -97,7 +98,7 @@ func newHandler(randFloat func() float64) http.Handler {
 			return
 		}
 		w.WriteHeader(code)
-		fmt.Fprintf(w, "status %d\n", code)
+		write(w, fmt.Sprintf("status %d\n", code))
 	})
 
 	mux.HandleFunc("GET /flaky", func(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +106,7 @@ func newHandler(randFloat func() float64) http.Handler {
 			http.Error(w, "flaky failure", http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprint(w, "ok\n")
+		write(w, "ok\n")
 	})
 
 	mux.HandleFunc("GET /switch", func(w http.ResponseWriter, _ *http.Request) {
@@ -113,15 +114,15 @@ func newHandler(randFloat func() float64) http.Handler {
 			http.Error(w, "switch is down", http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprint(w, "switch is up\n")
+		write(w, "switch is up\n")
 	})
 	mux.HandleFunc("POST /switch/down", func(w http.ResponseWriter, _ *http.Request) {
 		switchDown.Store(true)
-		fmt.Fprint(w, "switch is now down: GET /switch returns 503\n")
+		write(w, "switch is now down: GET /switch returns 503\n")
 	})
 	mux.HandleFunc("POST /switch/up", func(w http.ResponseWriter, _ *http.Request) {
 		switchDown.Store(false)
-		fmt.Fprint(w, "switch is now up: GET /switch returns 200\n")
+		write(w, "switch is now up: GET /switch returns 200\n")
 	})
 
 	return mux
@@ -144,4 +145,10 @@ func parseFailRate(raw string) float64 {
 		return defaultFlaky
 	}
 	return f
+}
+
+// write sends text to the caller. If the caller has already hung up there is
+// nobody to tell, so a write error is deliberately ignored.
+func write(w http.ResponseWriter, text string) {
+	_, _ = io.WriteString(w, text)
 }
