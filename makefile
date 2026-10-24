@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down reset logs psql migrate-up migrate-down migrate-new run-api fmt lint test tidy
+.PHONY: help up down reset logs psql migrate-up migrate-down migrate-new run-api run-mock fmt lint test tidy
 
 COMPOSE ?= docker compose
 POSTGRES_USER ?= pulse
@@ -35,6 +35,9 @@ migrate-new: ## Create a migration pair: make migrate-new name=add_incidents
 
 run-api: ## Run the API locally on :8080
 	cd backend && go run ./cmd/api
+
+run-mock: ## Run the fake target API on :9000 (for trying Pulse out)
+	cd backend && go run ./cmd/mocktarget
 
 fmt: ## Format Go code
 	cd backend && gofmt -s -w .

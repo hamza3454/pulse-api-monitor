@@ -3,8 +3,9 @@
 A distributed API monitoring platform. Add an endpoint and Pulse checks it on a
 schedule, tracking uptime, status codes, latency, failures and incidents.
 
-> **Status: Phase 1 in progress.** Monitor CRUD REST API on PostgreSQL is done.
-> Next: the in-process scheduler and goroutine worker pool, then the dashboard.
+> **Status: Phase 1 in progress.** Monitor CRUD API, the scheduler and the
+> goroutine worker pool are done: monitors are checked automatically and every
+> result is stored. Next: the React dashboard.
 
 ## Planned architecture
 
@@ -33,6 +34,31 @@ curl localhost:8080/healthz
 
 Run `make help` for all commands.
 
+## Try it: watch Pulse monitor something
+
+Open three terminals (from the repo root):
+
+```bash
+# 1. the API (also runs the scheduler and workers)
+make run-api
+
+# 2. a fake target you can break on purpose
+make run-mock
+
+# 3. create a monitor and look at its results
+curl -X POST localhost:8080/api/v1/monitors \
+  -d '{"name": "switch", "url": "http://localhost:9000/switch", "interval_seconds": 10}'
+curl localhost:8080/api/v1/monitors/MONITOR_ID/results
+
+curl -X POST localhost:9000/switch/down   # start an outage: checks now fail
+curl -X POST localhost:9000/switch/up     # recover
+```
+
+The mock target also has `/ok`, `/slow?ms=2000`, `/status/503` and `/flaky?fail=0.3`.
+
+Settings (all optional, see `.env.example`): `PULSE_WORKERS` (default 10, `0`
+turns monitoring off), `PULSE_SCHEDULER_TICK` (default 1s).
+
 Run the Postgres integration tests too (they use a throwaway schema, so your
 data is safe):
 
@@ -50,6 +76,7 @@ make test
 | `GET` | `/api/v1/monitors/{id}` | Get one monitor |
 | `PATCH` | `/api/v1/monitors/{id}` | Change any fields; `{"enabled": false}` pauses |
 | `DELETE` | `/api/v1/monitors/{id}` | Delete a monitor and its results (`204`) |
+| `GET` | `/api/v1/monitors/{id}/results` | Check history, newest first (`?limit=50&before=<time>`) |
 | `GET` | `/healthz` | Liveness: the process is up |
 | `GET` | `/readyz` | Readiness: the database answers |
 
@@ -68,8 +95,8 @@ expecting status 200. Errors always look like
 
 | Path | Purpose |
 |---|---|
-| `backend/cmd/` | One entry point per service (`api` now; `scheduler`, `worker` later) |
-| `backend/internal/` | Application code: `config`, `domain`, `api` (+ `middleware`), `store/postgres` |
+| `backend/cmd/` | One entry point per service (`api` and `mocktarget` now; `scheduler`, `worker` later) |
+| `backend/internal/` | Application code: `config`, `domain`, `api` (+ `middleware`), `store/postgres`, `scheduler`, `worker` |
 | `backend/migrations/` | SQL migrations ([golang-migrate](https://github.com/golang-migrate/migrate)) |
 | `docs/adr/` | Architecture Decision Records |
 | `.github/workflows/` | CI |

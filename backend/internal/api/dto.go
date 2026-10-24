@@ -54,6 +54,37 @@ type listMonitorsResponse struct {
 	Monitors []monitorResponse `json:"monitors"`
 }
 
+// resultResponse is one check in a monitor's history. status_code and
+// latency_ms are null when nothing came back (timeout, refused connection);
+// error is null when the check passed.
+type resultResponse struct {
+	ID         int64     `json:"id"`
+	CheckedAt  time.Time `json:"checked_at"`
+	Success    bool      `json:"success"`
+	StatusCode *int      `json:"status_code"`
+	LatencyMS  *int      `json:"latency_ms"`
+	Error      *string   `json:"error"`
+}
+
+// listResultsResponse returns results newest first. When there may be more,
+// next_before is the value to pass as ?before= to fetch the next page;
+// otherwise it is null.
+type listResultsResponse struct {
+	Results    []resultResponse `json:"results"`
+	NextBefore *time.Time       `json:"next_before"`
+}
+
+func toResultResponse(r domain.CheckResult) resultResponse {
+	return resultResponse{
+		ID:         r.ID,
+		CheckedAt:  r.CheckedAt,
+		Success:    r.Success,
+		StatusCode: r.StatusCode,
+		LatencyMS:  r.LatencyMS,
+		Error:      r.Error,
+	}
+}
+
 func toMonitorResponse(m domain.Monitor) monitorResponse {
 	return monitorResponse{
 		ID:              m.ID,

@@ -104,11 +104,10 @@ func (f *fakeStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func quietTestLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
 func newTestRouter(store MonitorStore) http.Handler {
-	return NewRouter(Deps{
-		Monitors: store,
-		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
+	return NewRouter(Deps{Monitors: store, Logger: quietTestLogger()})
 }
 
 // do sends a request with an optional JSON body and returns the recorder.

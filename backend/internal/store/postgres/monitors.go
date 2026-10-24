@@ -45,6 +45,32 @@ const (
 		RETURNING ` + monitorColumns
 
 	deleteMonitorSQL = `DELETE FROM monitors WHERE id = $1`
+
+	// claimDueSQL atomically picks monitors that are due and pushes their
+	// next_check_at forward, so no other scheduler can pick them again.
+	//
+	//   - FOR UPDATE SKIP LOCKED: rows another transaction is already claiming
+	//     are skipped instead of waited for, so several schedulers can run
+	//     side by side without blocking each other or double-claiming.
+	//   - The next check is "now + interval", not "old next_check_at + interval".
+	//     After downtime a monitor is checked once and then resumes its normal
+	//     rhythm, instead of firing a burst of catch-up checks.
+	//   - The CTE's column is called due_id so the unqualified column names in
+	//     RETURNING can only mean the monitors table.
+	claimDueSQL = `
+		WITH due AS (
+			SELECT id AS due_id
+			FROM monitors
+			WHERE enabled AND next_check_at <= now()
+			ORDER BY next_check_at
+			LIMIT $1
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE monitors
+		SET next_check_at = now() + make_interval(secs => interval_seconds)
+		FROM due
+		WHERE monitors.id = due.due_id
+		RETURNING ` + monitorColumns
 )
 
 // MonitorStore reads and writes monitors in PostgreSQL.
@@ -150,4 +176,37 @@ func (s *MonitorStore) Delete(ctx context.Context, id string) error {
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+// ClaimDue returns up to limit enabled monitors whose next_check_at has passed,
+// and reschedules each of them (next_check_at = now + its interval) in the same
+// atomic statement. The returned monitors carry the new, advanced
+// next_check_at. Calling it again immediately returns different monitors or
+// none, which is what makes it safe for the scheduler to call every second.
+//
+// Trade-off: once claimed, a monitor's next check is already scheduled. If the
+// process dies before the claimed monitors are checked, that one check is
+// skipped. Phase 3 narrows this gap with Kafka and idempotent retries.
+func (s *MonitorStore) ClaimDue(ctx context.Context, limit int) ([]domain.Monitor, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, claimDueSQL, limit)
+	if err != nil {
+		return nil, fmt.Errorf("claim due monitors: %w", err)
+	}
+	defer rows.Close()
+
+	var claimed []domain.Monitor
+	for rows.Next() {
+		m, err := scanMonitor(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan claimed monitor: %w", err)
+		}
+		claimed = append(claimed, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("claim due monitors: %w", err)
+	}
+	return claimed, nil
 }

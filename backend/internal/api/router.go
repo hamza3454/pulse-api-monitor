@@ -12,6 +12,7 @@ import (
 // globals) keeps handlers easy to test with fakes.
 type Deps struct {
 	Monitors   MonitorStore
+	Results    ResultStore
 	DB         Pinger // checked by /readyz; may be nil
 	Logger     *slog.Logger
 	CORSOrigin string // browser origin allowed to call the API; empty disables CORS
@@ -19,6 +20,7 @@ type Deps struct {
 
 type handlers struct {
 	monitors MonitorStore
+	results  ResultStore
 	db       Pinger
 	logger   *slog.Logger
 }
@@ -31,7 +33,7 @@ func NewRouter(d Deps) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handlers{monitors: d.Monitors, db: d.DB, logger: logger}
+	h := &handlers{monitors: d.Monitors, results: d.Results, db: d.DB, logger: logger}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
@@ -42,6 +44,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET "+monitorsPath+"/{id}", h.getMonitor)
 	mux.HandleFunc("PATCH "+monitorsPath+"/{id}", h.updateMonitor)
 	mux.HandleFunc("DELETE "+monitorsPath+"/{id}", h.deleteMonitor)
+	mux.HandleFunc("GET "+monitorsPath+"/{id}/results", h.listResults)
 
 	// Outermost first: the request ID must exist before anything logs.
 	return middleware.Chain(mux,

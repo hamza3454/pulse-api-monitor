@@ -15,12 +15,20 @@ import (
 	"pulse/internal/store/postgres"
 )
 
-// newTestStore returns a MonitorStore backed by a throwaway schema in the
-// database named by PULSE_TEST_DATABASE_URL. The schema is created from the
-// real migration file and dropped when the test ends, so tests are isolated
-// from each other and from any development data. Without the variable the
-// test is skipped, so `go test ./...` works with no database running.
+// newTestStore returns a MonitorStore backed by a throwaway schema; see
+// newTestPool.
 func newTestStore(t *testing.T) *postgres.MonitorStore {
+	t.Helper()
+	return postgres.NewMonitorStore(newTestPool(t))
+}
+
+// newTestPool returns a connection pool whose search_path points at a
+// throwaway schema in the database named by PULSE_TEST_DATABASE_URL. The schema
+// is created from the real migration file and dropped when the test ends, so
+// tests are isolated from each other and from any development data. Without
+// the variable the test is skipped, so `go test ./...` works with no database
+// running.
+func newTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
 	dsn := os.Getenv("PULSE_TEST_DATABASE_URL")
@@ -76,7 +84,7 @@ func newTestStore(t *testing.T) *postgres.MonitorStore {
 		t.Fatalf("apply migration: %v", err)
 	}
 
-	return postgres.NewMonitorStore(pool)
+	return pool
 }
 
 func newMonitor(name string) domain.Monitor {
