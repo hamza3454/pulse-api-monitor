@@ -3,9 +3,9 @@
 A distributed API monitoring platform. Add an endpoint and Pulse checks it on a
 schedule, tracking uptime, status codes, latency, failures and incidents.
 
-> **Status: Phase 1 in progress.** Monitor CRUD API, the scheduler and the
-> goroutine worker pool are done: monitors are checked automatically and every
-> result is stored. Next: the React dashboard.
+> **Status: Phase 1 complete.** Monitor CRUD API, scheduler, goroutine worker
+> pool and the React dashboard all work together: add a monitor in the browser
+> and watch it get checked. Next: Phase 2 (split into services with Kafka).
 
 ## Planned architecture
 
@@ -33,6 +33,19 @@ curl localhost:8080/healthz
 ```
 
 Run `make help` for all commands.
+
+## The dashboard
+
+```bash
+make run-api        # terminal 1
+cd frontend && npm install && npm run dev   # terminal 2 -> http://localhost:5173
+```
+
+It lists every monitor with Up/Down status, latest latency, last check time and
+a bar of recent results. Click a monitor for its full history; use the form to
+add one; Pause/Resume and Delete are on each row. It refreshes every 5 seconds.
+Set `VITE_API_URL` (see `frontend/.env.example`) if the API is not on `:8080`.
+Frontend checks: `npm run typecheck`, `npm test`, `npm run build`.
 
 ## Try it: watch Pulse monitor something
 
@@ -98,13 +111,14 @@ expecting status 200. Errors always look like
 | `backend/cmd/` | One entry point per service (`api` and `mocktarget` now; `scheduler`, `worker` later) |
 | `backend/internal/` | Application code: `config`, `domain`, `api` (+ `middleware`), `store/postgres`, `scheduler`, `worker` |
 | `backend/migrations/` | SQL migrations ([golang-migrate](https://github.com/golang-migrate/migrate)) |
+| `frontend/` | React + TypeScript dashboard (Vite, TanStack Query, Vitest) |
 | `docs/adr/` | Architecture Decision Records |
 | `.github/workflows/` | CI |
 
 ## Roadmap
 
 - [x] **Phase 0** — foundations: layout, schema, CI
-- [ ] Phase 1 — single-process MVP (REST API, goroutine workers, React dashboard)
+- [x] **Phase 1** — single-process MVP (REST API, goroutine workers, React dashboard)
 - [ ] Phase 2 — split into API / scheduler / worker with Kafka
 - [ ] Phase 3 — reliability: retries, idempotency, incidents, SSRF protection
 - [ ] Phase 4 — Redis caching, uptime rollups, richer dashboard
